@@ -29,10 +29,10 @@ import java.security.AlgorithmConstraints;
 import java.security.CryptoPrimitive;
 import java.security.AlgorithmParameters;
 
-import javax.net.ssl.*;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLSocket;
 
 import java.security.Key;
-
 import java.util.Set;
 import java.util.HashSet;
 

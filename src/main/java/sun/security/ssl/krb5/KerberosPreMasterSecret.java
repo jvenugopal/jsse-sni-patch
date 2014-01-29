@@ -29,13 +29,12 @@ import java.io.*;
 import java.security.*;
 import java.util.Arrays;
 
-import javax.net.ssl.*;
+import javax.net.ssl.SSLKeyException;
 
 import sun.security.krb5.EncryptionKey;
 import sun.security.krb5.EncryptedData;
 import sun.security.krb5.KrbException;
 import sun.security.krb5.internal.crypto.KeyUsage;
-
 import sun.security.ssl.Debug;
 import sun.security.ssl.HandshakeInStream;
 import sun.security.ssl.HandshakeMessage;

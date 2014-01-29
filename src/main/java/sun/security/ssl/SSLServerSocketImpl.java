@@ -30,15 +30,16 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.net.ServerSocket;
-
 import java.security.AlgorithmConstraints;
-
 import java.util.*;
 
 import javax.net.ServerSocketFactory;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLServerSocket;
 import javax.net.ssl.SSLParameters;
+
+import sun.security.ssl.sni.ExtendedSSLParameters;
+import sun.security.ssl.sni.SNIMatcher;
 
 
 /**
@@ -91,6 +92,10 @@ class SSLServerSocketImpl extends SSLServerSocket
 
     // The cryptographic algorithm constraints
     private AlgorithmConstraints    algorithmConstraints = null;
+    
+    // The server name indication
+    Collection<SNIMatcher>      sniMatchers =
+                                    Collections.<SNIMatcher>emptyList();
 
     /**
      * Create an SSL server socket on a port, using a non-default
@@ -284,11 +289,13 @@ class SSLServerSocketImpl extends SSLServerSocket
      * Returns the SSLParameters in effect for newly accepted connections.
      */
     synchronized public SSLParameters getSSLParameters() {
-        SSLParameters params = super.getSSLParameters();
+        ExtendedSSLParameters params = new ExtendedSSLParameters(super.getSSLParameters());
 
         // the super implementation does not handle the following parameters
         params.setEndpointIdentificationAlgorithm(identificationProtocol);
         params.setAlgorithmConstraints(algorithmConstraints);
+        // adding sniMatchers info
+        params.setSNIMatchers(sniMatchers);
 
         return params;
     }
@@ -302,6 +309,13 @@ class SSLServerSocketImpl extends SSLServerSocket
         // the super implementation does not handle the following parameters
         identificationProtocol = params.getEndpointIdentificationAlgorithm();
         algorithmConstraints = params.getAlgorithmConstraints();
+        
+		if (params instanceof ExtendedSSLParameters) {
+			ExtendedSSLParameters eParams = (ExtendedSSLParameters) params;
+			if (eParams.getSNIMatchers() != null) {
+				sniMatchers = eParams.getSNIMatchers();
+			}
+		}
     }
 
     /**
@@ -312,7 +326,7 @@ class SSLServerSocketImpl extends SSLServerSocket
     public Socket accept() throws IOException {
         SSLSocketImpl s = new SSLSocketImpl(sslContext, useServerMode,
             enabledCipherSuites, doClientAuth, enableSessionCreation,
-            enabledProtocols, identificationProtocol, algorithmConstraints);
+            enabledProtocols, identificationProtocol, algorithmConstraints, sniMatchers);
 
         implAccept(s);
         s.doneConnect();

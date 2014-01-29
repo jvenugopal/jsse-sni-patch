@@ -28,8 +28,10 @@ package sun.security.ssl;
 
 import java.io.*;
 import java.nio.*;
-import javax.net.ssl.*;
+
+import javax.net.ssl.SSLException;
 import javax.crypto.BadPaddingException;
+
 import sun.misc.HexDumpEncoder;
 
 

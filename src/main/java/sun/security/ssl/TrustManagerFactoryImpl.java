@@ -27,11 +27,14 @@ package sun.security.ssl;
 
 import java.util.*;
 import java.io.*;
-import java.math.*;
 import java.security.*;
 import java.security.cert.*;
-import javax.net.ssl.*;
-import java.security.spec.AlgorithmParameterSpec;
+
+import javax.net.ssl.CertPathTrustManagerParameters;
+import javax.net.ssl.ManagerFactoryParameters;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactorySpi;
+import javax.net.ssl.X509TrustManager;
 
 import sun.security.validator.Validator;
 

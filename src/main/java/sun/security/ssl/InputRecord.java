@@ -32,8 +32,9 @@ import java.net.SocketException;
 import java.net.SocketTimeoutException;
 
 import javax.crypto.BadPaddingException;
-
-import javax.net.ssl.*;
+import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLHandshakeException;
+import javax.net.ssl.SSLProtocolException;
 
 import sun.misc.HexDumpEncoder;
 

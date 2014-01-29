@@ -25,7 +25,9 @@
 
 package sun.security.ssl;
 
-import javax.net.ssl.*;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.X509ExtendedKeyManager;
+
 import java.security.*;
 import java.security.cert.*;
 import java.security.cert.Certificate;

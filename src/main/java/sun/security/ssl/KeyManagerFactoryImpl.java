@@ -27,11 +27,14 @@ package sun.security.ssl;
 
 import java.util.List;
 import java.util.Collections;
-
 import java.security.*;
 import java.security.KeyStore.*;
 
-import javax.net.ssl.*;
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.KeyManagerFactorySpi;
+import javax.net.ssl.KeyStoreBuilderParameters;
+import javax.net.ssl.ManagerFactoryParameters;
+import javax.net.ssl.X509ExtendedKeyManager;
 
 abstract class KeyManagerFactoryImpl extends KeyManagerFactorySpi {
 

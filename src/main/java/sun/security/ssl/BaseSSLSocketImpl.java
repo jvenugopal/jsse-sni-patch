@@ -30,7 +30,7 @@ import java.io.*;
 import java.nio.channels.SocketChannel;
 import java.net.*;
 
-import javax.net.ssl.*;
+import javax.net.ssl.SSLSocket;
 
 /**
  * Abstract base class for SSLSocketImpl. Its purpose is to house code with

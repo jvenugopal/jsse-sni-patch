@@ -34,18 +34,19 @@ import java.security.cert.*;
 import java.security.cert.Certificate;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-
 import java.lang.reflect.*;
 
 import javax.security.auth.x500.X500Principal;
-
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
-
-import javax.net.ssl.*;
+import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLHandshakeException;
+import javax.net.ssl.SSLKeyException;
+import javax.net.ssl.SSLProtocolException;
 
 import sun.security.internal.spec.TlsPrfParameterSpec;
 import sun.security.ssl.CipherSuite.*;
+import sun.security.ssl.sni.*;
 import static sun.security.ssl.CipherSuite.PRF.*;
 
 /**
@@ -254,19 +255,15 @@ static final class ClientHello extends HandshakeMessage {
                     clientVerifyData, new byte[0]);
         extensions.add(renegotiationInfo);
     }
-
-    // add server_name extension
-    void addServerNameIndicationExtension(String hostname) {
-        // We would have checked that the hostname ia a FQDN.
-        ArrayList<String> hostnames = new ArrayList<>(1);
-        hostnames.add(hostname);
-
-        try {
-            extensions.add(new ServerNameExtension(hostnames));
-        } catch (IOException ioe) {
-            // ignore the exception and return
-        }
-    }
+    
+	// add server_name extension
+	void addSNIExtension(List<SNIServerName> serverNames) {
+		try {
+			extensions.add(new ServerNameExtension(serverNames));
+		} catch (IOException ioe) {
+			// ignore the exception and return
+		}
+	}
 
     // add signature_algorithm extension
     void addSignatureAlgorithmsExtension(

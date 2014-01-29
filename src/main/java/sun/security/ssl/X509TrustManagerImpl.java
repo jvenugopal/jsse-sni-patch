@@ -27,16 +27,20 @@
 package sun.security.ssl;
 
 import java.net.Socket;
+
+import javax.net.ssl.ExtendedSSLSession;
+import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLSession;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.X509ExtendedTrustManager;
+import javax.net.ssl.X509TrustManager;
 
 import java.util.*;
 import java.security.*;
 import java.security.cert.*;
 
-import javax.net.ssl.*;
-
 import sun.security.validator.*;
-
+import sun.security.ssl.sni.*;
 import sun.security.util.HostnameChecker;
 
 /**
@@ -199,8 +203,8 @@ final class X509TrustManagerImpl extends X509ExtendedTrustManager
             String identityAlg = sslSocket.getSSLParameters().
                                         getEndpointIdentificationAlgorithm();
             if (identityAlg != null && identityAlg.length() != 0) {
-                String hostname = session.getPeerHost();
-                checkIdentity(hostname, chain[0], identityAlg);
+                checkIdentity(session, chain[0], identityAlg, isClient,
+                        Utils.getRequestedServerNames(socket));
             }
 
             // create the algorithm constraints
@@ -251,8 +255,8 @@ final class X509TrustManagerImpl extends X509ExtendedTrustManager
             String identityAlg = engine.getSSLParameters().
                                         getEndpointIdentificationAlgorithm();
             if (identityAlg != null && identityAlg.length() != 0) {
-                String hostname = session.getPeerHost();
-                checkIdentity(hostname, chain[0], identityAlg);
+            	checkIdentity(session, chain[0], identityAlg, isClient,
+                        Utils.getRequestedServerNames(engine));
             }
 
             // create the algorithm constraints
@@ -326,6 +330,87 @@ final class X509TrustManagerImpl extends X509ExtendedTrustManager
             return v.validate(chain, null, constraints, authType);
         } finally {
             JsseJce.endFipsProvider(o);
+        }
+    }
+    
+ // Get string representation of HostName from a list of server names.
+    //
+    // We are only accepting host_name name type in the list.
+    private static String getHostNameInSNI(List<SNIServerName> sniNames) {
+
+        SNIHostName hostname = null;
+        for (SNIServerName sniName : sniNames) {
+            if (sniName.getType() != StandardConstants.SNI_HOST_NAME) {
+                continue;
+            }
+
+            if (sniName instanceof SNIHostName) {
+                hostname = (SNIHostName)sniName;
+            } else {
+                try {
+                    hostname = new SNIHostName(sniName.getEncoded());
+                } catch (IllegalArgumentException iae) {
+                    // unlikely to happen, just in case ...
+                    if ((debug != null) && Debug.isOn("trustmanager")) {
+                        System.out.println("Illegal server name: " + sniName);
+                    }
+                }
+            }
+
+            // no more than server name of the same name type
+            break;
+        }
+
+        if (hostname != null) {
+            return hostname.getAsciiName();
+        }
+
+        return null;
+    }
+
+    
+    
+    /*
+     * Per RFC 6066, if an application negotiates a server name using an
+     * application protocol and then upgrades to TLS, and if a server_name
+     * extension is sent, then the extension SHOULD contain the same name
+     * that was negotiated in the application protocol.  If the server_name
+     * is established in the TLS session handshake, the client SHOULD NOT
+     * attempt to request a different server name at the application layer.
+     *
+     * According to the above spec, we only need to check either the identity
+     * in server_name extension or the peer host of the connection.  Peer host
+     * is not always a reliable fully qualified domain name. The HostName in
+     * server_name extension is more reliable than peer host. So we prefer
+     * the identity checking aginst the server_name extension if present, and
+     * may failove to peer host checking.
+     */
+    private static void checkIdentity(SSLSession session,
+            X509Certificate cert,
+            String algorithm,
+            boolean isClient,
+            List<SNIServerName> sniNames) throws CertificateException {
+
+        boolean identifiable = false;
+        String peerHost = session.getPeerHost();
+        if (isClient) {
+            String hostname = getHostNameInSNI(sniNames);
+            if (hostname != null) {
+                try {
+                    checkIdentity(hostname, cert, algorithm);
+                    identifiable = true;
+                } catch (CertificateException ce) {
+                    if (hostname.equalsIgnoreCase(peerHost)) {
+                        throw ce;
+                    }
+
+                    // otherwisw, failover to check peer host
+                }
+            }
+        }
+
+        if (!identifiable) {
+            checkIdentity(peerHost, cert, algorithm);
         }
     }
 

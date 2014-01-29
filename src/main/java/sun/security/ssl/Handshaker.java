@@ -29,25 +29,21 @@ package sun.security.ssl;
 import java.io.*;
 import java.util.*;
 import java.security.*;
-import java.security.NoSuchAlgorithmException;
-import java.security.AccessController;
-import java.security.AlgorithmConstraints;
-import java.security.AccessControlContext;
-import java.security.PrivilegedExceptionAction;
-import java.security.PrivilegedActionException;
 
 import javax.crypto.*;
 import javax.crypto.spec.*;
+import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLHandshakeException;
+import javax.net.ssl.SSLKeyException;
+import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.net.ssl.SSLProtocolException;
 
-import javax.net.ssl.*;
 import sun.misc.HexDumpEncoder;
-
 import sun.security.internal.spec.*;
 import sun.security.internal.interfaces.TlsMasterSecret;
-
 import sun.security.ssl.HandshakeMessage.*;
+import sun.security.ssl.sni.*;
 import sun.security.ssl.CipherSuite.*;
-
 import static sun.security.ssl.CipherSuite.PRF.*;
 
 /**
@@ -111,6 +107,12 @@ abstract class Handshaker {
      * contain only those cipher suites available for the active protocols.
      */
     private CipherSuiteList    activeCipherSuites;
+    
+    // The server name indication and matchers
+    List<SNIServerName>         serverNames =
+                                    Collections.<SNIServerName>emptyList();
+    Collection<SNIMatcher>      sniMatchers =
+                                    Collections.<SNIMatcher>emptyList();
 
     private boolean             isClient;
     private boolean             needCertVerify;
@@ -434,6 +436,23 @@ abstract class Handshaker {
     void setIdentificationProtocol(String protocol) {
         this.identificationProtocol = protocol;
     }
+    
+    /**
+     * Sets the server name indication of the handshake.
+     */
+    void setSNIServerNames(List<SNIServerName> serverNames) {
+        // The serverNames parameter is unmodifiable.
+        this.serverNames = serverNames;
+    }
+
+    /**
+     * Sets the server name matchers of the handshaking.
+     */
+    void setSNIMatchers(Collection<SNIMatcher> sniMatchers) {
+        // The sniMatchers parameter is unmodifiable.
+        this.sniMatchers = sniMatchers;
+    }
+
 
     /**
      * Prior to handshaking, activate the handshake and initialize the version,

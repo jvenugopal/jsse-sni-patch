@@ -25,7 +25,6 @@
 
 package sun.security.ssl;
 
-import javax.net.ssl.*;
 import java.nio.*;
 
 /*

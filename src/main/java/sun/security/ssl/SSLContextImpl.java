@@ -26,14 +26,29 @@
 package sun.security.ssl;
 
 import java.net.Socket;
-
 import java.io.*;
 import java.util.*;
 import java.security.*;
 import java.security.cert.*;
 import java.security.cert.Certificate;
 
-import javax.net.ssl.*;
+import javax.net.ssl.ExtendedSSLSession;
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContextSpi;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLServerSocketFactory;
+import javax.net.ssl.SSLSession;
+import javax.net.ssl.SSLSessionContext;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509ExtendedKeyManager;
+import javax.net.ssl.X509ExtendedTrustManager;
+import javax.net.ssl.X509KeyManager;
+import javax.net.ssl.X509TrustManager;
 
 import sun.security.provider.certpath.AlgorithmChecker;
 

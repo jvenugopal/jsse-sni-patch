@@ -28,9 +28,6 @@ package sun.security.ssl;
 
 import java.io.ByteArrayOutputStream;
 import java.security.*;
-import java.util.Arrays;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 

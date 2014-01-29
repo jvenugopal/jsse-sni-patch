@@ -25,18 +25,30 @@
 
 package sun.security.ssl;
 
-import java.io.*;
-import java.nio.*;
-import java.nio.ReadOnlyBufferException;
-import java.util.LinkedList;
-import java.security.*;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.security.AccessControlContext;
+import java.security.AccessController;
+import java.security.AlgorithmConstraints;
+import java.security.GeneralSecurityException;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 
 import javax.crypto.BadPaddingException;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLEngineResult;
+import javax.net.ssl.SSLEngineResult.HandshakeStatus;
+import javax.net.ssl.SSLEngineResult.Status;
+import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLHandshakeException;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLProtocolException;
+import javax.net.ssl.SSLSession;
 
-import javax.net.ssl.*;
-import javax.net.ssl.SSLEngineResult.*;
-
-import com.sun.net.ssl.internal.ssl.X509ExtendedTrustManager;
+import sun.security.ssl.sni.ExtendedSSLParameters;
+import sun.security.ssl.sni.SNIMatcher;
+import sun.security.ssl.sni.SNIServerName;
 
 /**
  * Implementation of an non-blocking SSLEngine.
@@ -255,6 +267,12 @@ final public class SSLEngineImpl extends SSLEngine {
 
     // The cryptographic algorithm constraints
     private AlgorithmConstraints        algorithmConstraints = null;
+    
+    // The server name indication and matchers
+    List<SNIServerName>         serverNames =
+                                    Collections.<SNIServerName>emptyList();
+    Collection<SNIMatcher>      sniMatchers =
+                                    Collections.<SNIMatcher>emptyList();
 
     // Have we been told whether we're client or server?
     private boolean                     serverModeSet = false;
@@ -358,6 +376,10 @@ final public class SSLEngineImpl extends SSLEngine {
          */
         roleIsServer = true;
         connectionState = cs_START;
+        
+        // default server name indication
+        serverNames =
+            Utilities.addToSNIServerNameList(serverNames, getPeerHost());
 
         /*
          * default read and write side cipher and MAC support
@@ -457,11 +479,13 @@ final public class SSLEngineImpl extends SSLEngine {
                     enabledProtocols, doClientAuth,
                     protocolVersion, connectionState == cs_HANDSHAKE,
                     secureRenegotiation, clientVerifyData, serverVerifyData);
+            handshaker.setSNIMatchers(sniMatchers);
         } else {
             handshaker = new ClientHandshaker(this, sslContext,
                     enabledProtocols,
                     protocolVersion, connectionState == cs_HANDSHAKE,
                     secureRenegotiation, clientVerifyData, serverVerifyData);
+            handshaker.setSNIServerNames(serverNames);
         }
         handshaker.setEnabledCipherSuites(enabledCipherSuites);
         handshaker.setEnableSessionCreation(enableSessionCreation);
@@ -2020,11 +2044,14 @@ final public class SSLEngineImpl extends SSLEngine {
      * Returns the SSLParameters in effect for this SSLEngine.
      */
     synchronized public SSLParameters getSSLParameters() {
-        SSLParameters params = super.getSSLParameters();
+        ExtendedSSLParameters params = new ExtendedSSLParameters(super.getSSLParameters());
 
         // the super implementation does not handle the following parameters
         params.setEndpointIdentificationAlgorithm(identificationProtocol);
         params.setAlgorithmConstraints(algorithmConstraints);
+        
+        params.setServerNames(serverNames);
+        params.setSNIMatchers(sniMatchers);
 
         return params;
     }
@@ -2038,9 +2065,30 @@ final public class SSLEngineImpl extends SSLEngine {
         // the super implementation does not handle the following parameters
         identificationProtocol = params.getEndpointIdentificationAlgorithm();
         algorithmConstraints = params.getAlgorithmConstraints();
+        
+        // Reading SNI info if the given object is instance of ExtendedSSLParameters.
+		if (params instanceof ExtendedSSLParameters) {
+			ExtendedSSLParameters eParams = (ExtendedSSLParameters) params;
+
+			List<SNIServerName> sniNames = eParams.getServerNames();
+			if (sniNames != null) {
+				serverNames = sniNames;
+			}
+
+			Collection<SNIMatcher> matchers = eParams.getSNIMatchers();
+			if (matchers != null) {
+				sniMatchers = matchers;
+			}
+		}
+        
         if ((handshaker != null) && !handshaker.started()) {
             handshaker.setIdentificationProtocol(identificationProtocol);
             handshaker.setAlgorithmConstraints(algorithmConstraints);
+            if (roleIsServer) {
+                handshaker.setSNIMatchers(sniMatchers);
+            } else {
+                handshaker.setSNIServerNames(serverNames);
+            }
         }
     }
 

@@ -26,22 +26,45 @@
 
 package sun.security.ssl;
 
-import java.io.*;
-import java.net.*;
-import java.security.GeneralSecurityException;
-import java.security.AccessController;
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InterruptedIOException;
+import java.io.OutputStream;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.SocketAddress;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.security.AccessControlContext;
-import java.security.PrivilegedAction;
+import java.security.AccessController;
 import java.security.AlgorithmConstraints;
-import java.util.*;
+import java.security.GeneralSecurityException;
+import java.security.PrivilegedAction;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
 import javax.crypto.BadPaddingException;
+import javax.net.ssl.HandshakeCompletedEvent;
+import javax.net.ssl.HandshakeCompletedListener;
+import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLHandshakeException;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLProtocolException;
+import javax.net.ssl.SSLServerSocket;
+import javax.net.ssl.SSLSession;
 
-import javax.net.ssl.*;
-
-import com.sun.net.ssl.internal.ssl.X509ExtendedTrustManager;
+import sun.security.ssl.sni.ExtendedSSLParameters;
+import sun.security.ssl.sni.SNIMatcher;
+import sun.security.ssl.sni.SNIServerName;
 
 /**
  * Implementation of an SSL socket.  This is a normal connection type
@@ -216,6 +239,12 @@ final public class SSLSocketImpl extends BaseSSLSocketImpl {
 
     // The cryptographic algorithm constraints
     private AlgorithmConstraints    algorithmConstraints = null;
+    
+ // The server name indication and matchers
+    List<SNIServerName>         serverNames =
+                                    Collections.<SNIServerName>emptyList();
+    Collection<SNIMatcher>      sniMatchers =
+                                    Collections.<SNIMatcher>emptyList();
 
     /*
      * READ ME * READ ME * READ ME * READ ME * READ ME * READ ME *
@@ -389,6 +418,8 @@ final public class SSLSocketImpl extends BaseSSLSocketImpl {
         super();
         this.host = host;
         this.rawHostname = host;
+        this.serverNames =
+                Utilities.addToSNIServerNameList(this.serverNames, this.host);
         init(context, false);
         SocketAddress socketAddress =
                host != null ? new InetSocketAddress(host, port) :
@@ -432,6 +463,8 @@ final public class SSLSocketImpl extends BaseSSLSocketImpl {
         super();
         this.host = host;
         this.rawHostname = host;
+        this.serverNames =
+                Utilities.addToSNIServerNameList(this.serverNames, this.host);
         init(context, false);
         bind(new InetSocketAddress(localAddr, localPort));
         SocketAddress socketAddress =
@@ -473,13 +506,16 @@ final public class SSLSocketImpl extends BaseSSLSocketImpl {
             CipherSuiteList suites, byte clientAuth,
             boolean sessionCreation, ProtocolList protocols,
             String identificationProtocol,
-            AlgorithmConstraints algorithmConstraints) throws IOException {
+            AlgorithmConstraints algorithmConstraints,
+            Collection<SNIMatcher> sniMatchers) throws IOException {
 
         super();
         doClientAuth = clientAuth;
         enableSessionCreation = sessionCreation;
         this.identificationProtocol = identificationProtocol;
         this.algorithmConstraints = algorithmConstraints;
+        // Adding sniMatchers from SSLServerSocket.
+        this.sniMatchers = sniMatchers;
         init(context, serverMode);
 
         /*
@@ -527,6 +563,8 @@ final public class SSLSocketImpl extends BaseSSLSocketImpl {
         }
         this.host = host;
         this.rawHostname = host;
+        this.serverNames =
+                Utilities.addToSNIServerNameList(this.serverNames, this.host);
         init(context, false);
         this.autoClose = autoClose;
         doneConnect();
@@ -1213,11 +1251,13 @@ final public class SSLSocketImpl extends BaseSSLSocketImpl {
                     enabledProtocols, doClientAuth,
                     protocolVersion, connectionState == cs_HANDSHAKE,
                     secureRenegotiation, clientVerifyData, serverVerifyData);
+            handshaker.setSNIMatchers(sniMatchers);
         } else {
             handshaker = new ClientHandshaker(this, sslContext,
                     enabledProtocols,
                     protocolVersion, connectionState == cs_HANDSHAKE,
                     secureRenegotiation, clientVerifyData, serverVerifyData);
+            handshaker.setSNIServerNames(serverNames);
         }
         handshaker.setEnabledCipherSuites(enabledCipherSuites);
         handshaker.setEnableSessionCreation(enableSessionCreation);
@@ -2058,9 +2098,15 @@ final public class SSLSocketImpl extends BaseSSLSocketImpl {
     }
 
     // ONLY used by HttpsClient to setup the URI specified hostname
+    //
+    // Please NOTE that this method MUST be called before calling to
+    // SSLSocket.setSSLParameters(). Otherwise, the {@code host} parameter
+    // may override SNIHostName in the customized server name indication.
     synchronized public void setHost(String host) {
         this.host = host;
         this.rawHostname = host;
+        this.serverNames =
+                Utilities.addToSNIServerNameList(this.serverNames, this.host);
     }
 
     /**
@@ -2403,11 +2449,15 @@ final public class SSLSocketImpl extends BaseSSLSocketImpl {
      * Returns the SSLParameters in effect for this SSLSocket.
      */
     synchronized public SSLParameters getSSLParameters() {
-        SSLParameters params = super.getSSLParameters();
+        ExtendedSSLParameters params = new ExtendedSSLParameters(super.getSSLParameters());
 
         // the super implementation does not handle the following parameters
         params.setEndpointIdentificationAlgorithm(identificationProtocol);
         params.setAlgorithmConstraints(algorithmConstraints);
+        
+        // adding sni variables
+        params.setSNIMatchers(sniMatchers);
+        params.setServerNames(serverNames);
 
         return params;
     }
@@ -2421,9 +2471,30 @@ final public class SSLSocketImpl extends BaseSSLSocketImpl {
         // the super implementation does not handle the following parameters
         identificationProtocol = params.getEndpointIdentificationAlgorithm();
         algorithmConstraints = params.getAlgorithmConstraints();
+        
+        // Reading SNI info if params is instance of ExtendedSSLParameters
+        if (params instanceof ExtendedSSLParameters) {
+			ExtendedSSLParameters eParams = (ExtendedSSLParameters) params;
+			
+			List<SNIServerName> sniNames = eParams.getServerNames();
+	        if (sniNames != null) {
+	            serverNames = sniNames;
+	        }
+
+	        Collection<SNIMatcher> matchers = eParams.getSNIMatchers();
+	        if (matchers != null) {
+	            sniMatchers = matchers;
+	        }
+		}
+        
         if ((handshaker != null) && !handshaker.started()) {
             handshaker.setIdentificationProtocol(identificationProtocol);
             handshaker.setAlgorithmConstraints(algorithmConstraints);
+            if (roleIsServer) {
+                handshaker.setSNIMatchers(sniMatchers);
+            } else {
+                handshaker.setSNIServerNames(serverNames);
+            }
         }
     }
 

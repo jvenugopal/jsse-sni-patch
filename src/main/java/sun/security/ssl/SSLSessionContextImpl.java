@@ -26,20 +26,11 @@
 
 package sun.security.ssl;
 
-import java.io.*;
-import java.net.*;
-import java.util.Date;
 import java.util.Enumeration;
-import java.util.Hashtable;
-import java.util.NoSuchElementException;
 import java.util.Vector;
 
 import javax.net.ssl.SSLSession;
 import javax.net.ssl.SSLSessionContext;
-import javax.net.ssl.SSLSessionBindingListener;
-import javax.net.ssl.SSLSessionBindingEvent;
-import javax.net.ssl.SSLPeerUnverifiedException;
-import javax.net.ssl.SSLSession;
 
 import sun.security.util.Cache;
 

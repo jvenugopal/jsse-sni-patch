@@ -32,8 +32,8 @@ import java.security.interfaces.*;
 
 import javax.crypto.*;
 import javax.crypto.spec.*;
-
-import javax.net.ssl.*;
+import javax.net.ssl.SSLKeyException;
+import javax.net.ssl.SSLProtocolException;
 
 import sun.security.internal.spec.TlsRsaPremasterSecretParameterSpec;
 

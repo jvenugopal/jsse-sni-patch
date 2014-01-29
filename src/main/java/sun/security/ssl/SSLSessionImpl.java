@@ -26,36 +26,32 @@
 
 package sun.security.ssl;
 
-import java.io.*;
-import java.net.*;
-import java.util.Enumeration;
-import java.util.Hashtable;
-import java.util.Vector;
-import java.util.Arrays;
-import java.util.Collection;
+import static sun.security.ssl.CipherSuite.KeyExchange.K_KRB5;
+import static sun.security.ssl.CipherSuite.KeyExchange.K_KRB5_EXPORT;
 
+import java.net.InetAddress;
 import java.security.Principal;
 import java.security.PrivateKey;
 import java.security.SecureRandom;
-import java.security.cert.X509Certificate;
 import java.security.cert.CertificateEncodingException;
+import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.Hashtable;
+import java.util.List;
+import java.util.Vector;
 
 import javax.crypto.SecretKey;
-
-import javax.net.ssl.SSLSession;
-import javax.net.ssl.SSLSessionContext;
-import javax.net.ssl.SSLSessionBindingListener;
-import javax.net.ssl.SSLSessionBindingEvent;
 import javax.net.ssl.SSLPeerUnverifiedException;
-import javax.net.ssl.SSLSession;
 import javax.net.ssl.SSLPermission;
-import javax.net.ssl.SSLException;
-import javax.net.ssl.ExtendedSSLSession;
+import javax.net.ssl.SSLSessionBindingEvent;
+import javax.net.ssl.SSLSessionBindingListener;
+import javax.net.ssl.SSLSessionContext;
 
-import javax.security.auth.x500.X500Principal;
-
-import static sun.security.ssl.CipherSuite.*;
-import static sun.security.ssl.CipherSuite.KeyExchange.*;
+import sun.security.ssl.sni.SNIExtendedSSLSession;
+import sun.security.ssl.sni.SNIServerName;
 
 /**
  * Implements the SSL session interface, and exposes the session context
@@ -75,7 +71,7 @@ import static sun.security.ssl.CipherSuite.KeyExchange.*;
  *
  * @author David Brownell
  */
-final class SSLSessionImpl extends ExtendedSSLSession {
+final class SSLSessionImpl extends SNIExtendedSSLSession {
 
     /*
      * we only really need a single null session
@@ -111,6 +107,7 @@ final class SSLSessionImpl extends ExtendedSSLSession {
     private PrivateKey          localPrivateKey;
     private String[]            localSupportedSignAlgs;
     private String[]            peerSupportedSignAlgs;
+    private List<SNIServerName>    requestedServerNames;
 
     // Principals for non-certificate based cipher suites
     private Principal peerPrincipal;
@@ -766,6 +763,24 @@ final class SSLSessionImpl extends ExtendedSSLSession {
         }
 
         return new String[0];
+    }
+    
+    void setRequestedServerNames(List<SNIServerName> requestedServerNames) {
+        this.requestedServerNames = new ArrayList<>(requestedServerNames);
+    }
+    
+    /**
+     * Obtains a <code>List</code> containing all {@link SNIServerName}s
+     * of the requested Server Name Indication (SNI) extension.
+     */
+    @Override
+    public List<SNIServerName> getRequestedServerNames() {
+        if (requestedServerNames != null && !requestedServerNames.isEmpty()) {
+            return Collections.<SNIServerName>unmodifiableList(
+                                                requestedServerNames);
+        }
+
+        return Collections.<SNIServerName>emptyList();
     }
 
     /** Returns a string representation of this SSL session */

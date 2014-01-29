@@ -29,26 +29,26 @@ import java.io.*;
 import java.math.BigInteger;
 import java.security.*;
 import java.util.*;
-
 import java.security.interfaces.ECPublicKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.ECParameterSpec;
-
 import java.security.cert.X509Certificate;
 import java.security.cert.CertificateException;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
-
-import javax.net.ssl.*;
-
+import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLHandshakeException;
+import javax.net.ssl.SSLProtocolException;
+import javax.net.ssl.X509ExtendedKeyManager;
+import javax.net.ssl.X509ExtendedTrustManager;
+import javax.net.ssl.X509TrustManager;
 import javax.security.auth.Subject;
 
 import sun.security.ssl.HandshakeMessage.*;
+import sun.security.ssl.sni.*;
 import sun.security.ssl.CipherSuite.*;
 import static sun.security.ssl.CipherSuite.KeyExchange.*;
-
-import sun.net.util.IPAddressUtil;
 
 /**
  * ClientHandshaker does the protocol handshaking from the point
@@ -91,6 +91,10 @@ final class ClientHandshaker extends Handshaker {
     // To switch off the SNI extension.
     private final static boolean enableSNIExtension =
             Debug.getBooleanProperty("jsse.enableSNIExtension", true);
+    private List<SNIServerName> requestedServerNames =
+            Collections.<SNIServerName>emptyList();
+
+    private boolean serverNamesAccepted = false;
 
     /*
      * Constructors
@@ -564,21 +568,24 @@ final class ClientHandshaker extends Handshaker {
         }
 
         // check extensions
-        for (HelloExtension ext : mesg.extensions.list()) {
-            ExtensionType type = ext.type;
-            if ((type != ExtensionType.EXT_ELLIPTIC_CURVES)
-                    && (type != ExtensionType.EXT_EC_POINT_FORMATS)
-                    && (type != ExtensionType.EXT_SERVER_NAME)
-                    && (type != ExtensionType.EXT_RENEGOTIATION_INFO)) {
-                fatalSE(Alerts.alert_unsupported_extension,
-                    "Server sent an unsupported extension: " + type);
-            }
-        }
+		for (HelloExtension ext : mesg.extensions.list()) {
+			ExtensionType type = ext.type;
+			if (type == ExtensionType.EXT_SERVER_NAME) {
+				serverNamesAccepted = true;
+			} else if ((type != ExtensionType.EXT_ELLIPTIC_CURVES)
+					&& (type != ExtensionType.EXT_EC_POINT_FORMATS)
+					&& (type != ExtensionType.EXT_SERVER_NAME)
+					&& (type != ExtensionType.EXT_RENEGOTIATION_INFO)) {
+				fatalSE(Alerts.alert_unsupported_extension,
+						"Server sent an unsupported extension: " + type);
+			}
+		}
 
         // Create a new session, we need to do the full handshake
         session = new SSLSessionImpl(protocolVersion, cipherSuite,
                             getLocalSupportedSignAlgs(),
                             mesg.sessionId, getHostSE(), getPortSE());
+        session.setRequestedServerNames(requestedServerNames);
         setHandshakeSessionSE(session);
         if (debug != null && Debug.isOn("handshake")) {
             System.out.println("** " + cipherSuite);
@@ -862,15 +869,46 @@ final class ClientHandshaker extends Handshaker {
             break;
         case K_KRB5:
         case K_KRB5_EXPORT:
-            String hostname = getHostSE();
-            if (hostname == null) {
-                throw new IOException("Hostname is required" +
-                                " to use Kerberos cipher suites");
+            String sniHostname = null;
+            for (SNIServerName serverName : requestedServerNames) {
+                if (serverName instanceof SNIHostName) {
+                    sniHostname = ((SNIHostName) serverName).getAsciiName();
+                    break;
+                }
             }
-            KerberosClientKeyExchange kerberosMsg =
-                new KerberosClientKeyExchange(
-                    hostname, isLoopbackSE(), getAccSE(), protocolVersion,
-                sslContext.getSecureRandom());
+
+			KerberosClientKeyExchange kerberosMsg = null;
+			if (sniHostname != null) {
+				// use first requested SNI hostname
+				try {
+					kerberosMsg = new KerberosClientKeyExchange(
+							sniHostname, isLoopbackSE(), getAccSE(),
+							protocolVersion, sslContext.getSecureRandom());
+				} catch (IOException e) {
+					if (serverNamesAccepted) {
+						// server accepted requested SNI hostname,
+						// so it must be used
+						throw e;
+					}
+					// fallback to using hostname
+					if (debug != null && Debug.isOn("handshake")) {
+						System.out
+								.println("Warning, cannot use Server Name Indication: "
+										+ e.getMessage());
+					}
+				}
+			}
+
+			if (kerberosMsg == null) {
+				String hostname = getHostSE();
+				if (hostname == null) {
+					throw new IOException("Hostname is required"
+							+ " to use Kerberos cipher suites");
+				}
+				kerberosMsg = new KerberosClientKeyExchange(hostname,
+						isLoopbackSE(), getAccSE(), protocolVersion,
+						sslContext.getSecureRandom());
+			}
             // Record the principals involved in exchange
             session.setPeerPrincipal(kerberosMsg.getPeerPrincipal());
             session.setLocalPrincipal(kerberosMsg.getLocalPrincipal());
@@ -1245,17 +1283,14 @@ final class ClientHandshaker extends Handshaker {
 
         // add server_name extension
         if (enableSNIExtension) {
-            // We cannot use the hostname resolved from name services.  For
-            // virtual hosting, multiple hostnames may be bound to the same IP
-            // address, so the hostname resolved from name services is not
-            // reliable.
-            String hostname = getRawHostnameSE();
+        	if (session != null) {
+                requestedServerNames = session.getRequestedServerNames();
+            } else {
+                requestedServerNames = serverNames;
+            }
 
-            // we only allow FQDN
-            if (hostname != null && hostname.indexOf('.') > 0 &&
-                    !IPAddressUtil.isIPv4LiteralAddress(hostname) &&
-                    !IPAddressUtil.isIPv6LiteralAddress(hostname)) {
-                clientHelloMessage.addServerNameIndicationExtension(hostname);
+            if (!requestedServerNames.isEmpty()) {
+                clientHelloMessage.addSNIExtension(requestedServerNames);
             }
         }
 

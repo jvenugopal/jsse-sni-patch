@@ -173,6 +173,18 @@ public class Debug {
         }
         s.println(" }");
     }
+    
+	/**
+	 * Returns the value of system property propName.
+	 * 
+	 * Note use of doPrivileged(). Do make accessible to applications.
+	 * 
+	 * @param propName
+	 * @return
+	 */
+	static String getProperty(String propName) {
+		return AccessController.doPrivileged(new GetPropertyAction(propName));
+	}
 
     /**
      * Return the value of the boolean System property propName.

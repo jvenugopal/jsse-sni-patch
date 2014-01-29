@@ -25,7 +25,8 @@
 
 package sun.security.ssl;
 
-import javax.net.ssl.*;
+import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLHandshakeException;
 
 /*
  * A simple class to congregate alerts, their definitions, and common
