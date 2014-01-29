@@ -1,0 +1,9 @@
+Manifest-Version: 1.0
+Implementation-Vendor: N/A
+Implementation-Title: Java Runtime Environment
+Implementation-Version: 1.7.0_25
+Specification-Vendor: Oracle Corporation
+Created-By: 1.7.0_0 (Oracle Corporation)
+Specification-Title: Java Platform API Specification
+Specification-Version: 1.7
+
