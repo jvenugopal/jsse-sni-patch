@@ -318,7 +318,7 @@ final class ServerHandshaker extends Handshaker {
 			// checking client SNI support.
 			if (clientHelloSNIExt == null) {
 				if (!(Debug.getBooleanProperty(
-						StandardConstants.ALLOW_WITH_OUT_SNI, false))) {
+						StandardConstants.ALLOW_WITH_OUT_SNI, true))) {
 					// rejecting connection because we are not allowing clients
 					// without SNI support
 					fatalSE(Alerts.alert_protocol_version,

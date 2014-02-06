@@ -63,9 +63,10 @@ sslParameters.setSNIMatchers(matchers);
 ####Configuration for Clients which do not have SNISupport:
 
 #####To Allow (or) Deny Clients:
-Set system property `jsse.allowWithoutSNI` to `true` (or) `false`.
+Set system property `jsse.allowWithoutSNI` to `true` (or) `false`.<br>
+Default value is `true`. i.e it allows clients which do not have SNI support.
 
 #####Default certificate Alias:
 Set system property `jsse.defaultCertificateAlias`to `<certificate alias>`.<br>
 <strong>Note:</strong> The given certificate alias will be served to the clients which do not have SNISupport.<br>
-If you dont give any value (or) given `<certificate alias>` is invalid, then system will pick automatically any certificate based on some standard prefernces. 
+If you dont give any value (or) given `<certificate alias>` is invalid, then system will pick automatically best certificate based on some standard prefernces. 
