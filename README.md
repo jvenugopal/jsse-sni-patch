@@ -11,6 +11,8 @@ This is a server-side implementation of Server Name Indication (SNI) in SSLServe
 3. Type `mvn package` to compile project. It will generates `jsse.jar` file in `target` directory.
 4. Backup `$JAVA_HOME/jre/lib/jsse.jar`.
 5. Replace `$JAVA_HOME/jre/lib/jsse.jar` file with generated one. i.e `$PROJECT_HOME/target/jsse.jar`.
+6. Make sure that your using `X509KeyManagerImpl`. To do this specify algorithm as `NewSunX509`<br> 
+<strong>Eg:</strong> `KeyManagerFactory.getInstance("NewSunX509");`
 
 
 ###Usage:
